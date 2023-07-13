@@ -12,6 +12,7 @@ geometry_msgs::PolygonStamped CustomMarker::get_polygon_msg(pcl::PointCloud<pcl:
 {
   vector<Point2f> points;
   geometry_msgs::PolygonStamped polygonStamped;
+  //polygonStamped.header.frame_id = "os_sensor";
   polygonStamped.header.frame_id = "world";
 
   float min_z = 100.0;
@@ -56,6 +57,7 @@ geometry_msgs::PolygonStamped CustomMarker::get_polygon_msg(pcl::PointCloud<pcl:
 jsk_recognition_msgs::BoundingBox CustomMarker::get_bbox_msg(Box box, int clusterId, int clusterclass)
 {
   jsk_recognition_msgs::BoundingBox bbox;
+  //bbox.header.frame_id = "os_sensor";
   bbox.header.frame_id = "world";
 
   bbox.pose.position.x = (box.x_min + box.x_max) / 2.0;
@@ -77,6 +79,7 @@ jsk_recognition_msgs::BoundingBox CustomMarker::get_bbox_msg(Box box, int cluste
 jsk_recognition_msgs::BoundingBox CustomMarker::get_bboxq_msg(BoxQ box, int clusterId)
 {
   jsk_recognition_msgs::BoundingBox bbox;
+  //bbox.header.frame_id = "os_sensor";
   bbox.header.frame_id = "world";
 
   bbox.pose.position.x = box.bboxTransform[0];
@@ -97,6 +100,7 @@ jsk_recognition_msgs::BoundingBox CustomMarker::get_bboxq_msg(BoxQ box, int clus
 visualization_msgs::Marker CustomMarker::get_text_msg(struct trackingStruct &track, int i)
 {
   visualization_msgs::Marker text;
+  //text.header.frame_id = "os_sensor";
   text.header.frame_id = "world";
   text.ns = "text";
   text.id = i;

@@ -160,11 +160,20 @@ std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT
 template<typename PointT>
 std::vector<typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::Clustering(typename pcl::PointCloud<PointT>::Ptr cloud, float clusterTolerance, int minSize, int maxSize)
 {
-
     // Time clustering process
     auto startTime = std::chrono::steady_clock::now();
 
     std::vector<typename pcl::PointCloud<PointT>::Ptr> clusters;
+    //std::cout << "PointCloud before filtering has: " << cloud->points.size ()  << " data points." << std::endl;
+    
+    // Data containers used
+    // Create the filtering object: downsample the dataset using a leaf size of 1cm
+    pcl::VoxelGrid<pcl::PointXYZI> vg;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZI>);
+    vg.setInputCloud (cloud->makeShared());
+    vg.setLeafSize (0.1f, 0.1f, 0.1f);
+    vg.filter (*cloud);
+    //std::cout << "PointCloud after filtering has: " << cloud->points.size ()  << " data points." << std::endl;
 
     // TODO:: Fill in the function to perform euclidean clustering to group detected obstacles
     typename pcl::search::KdTree<PointT>::Ptr tree(new pcl::search::KdTree<PointT>);
@@ -394,9 +403,10 @@ BoxQ ProcessPointClouds<PointT>::MinimumOrientedBoundingBox(typename pcl::PointC
     */
     double cx = (maxPoint.x+minPoint.x)/2.0;
     double cy = (maxPoint.y+minPoint.y)/2.0;
+    double cz = (maxPoint.z+minPoint.z)/2.0;
     
     BoxQ box;
-    box.bboxTransform = {cx, cy, -sensor_height_ / 2};
+    box.bboxTransform = {cx, cy, cz};
 
     //toRightAngleBBox
     cv::Point2f pp1 = pointcloud_frame_points[0];
@@ -446,7 +456,7 @@ BoxQ ProcessPointClouds<PointT>::MinimumOrientedBoundingBox(typename pcl::PointC
         bb_yaw = atan2(ppp1.y - ppp2.y, ppp1.x - ppp2.x);
         box.cube_length = dist1;
         box.cube_width = dist2;
-        box.cube_height = 1;
+        box.cube_height = maxPoint.z-minPoint.z;
     }
     // dist1 is width, dist2 is length
     else
@@ -454,7 +464,7 @@ BoxQ ProcessPointClouds<PointT>::MinimumOrientedBoundingBox(typename pcl::PointC
         bb_yaw = atan2(ppp3.y - ppp2.y, ppp3.x - ppp2.x);
         box.cube_length = dist2;
         box.cube_width = dist1;
-        box.cube_height = 1;
+        box.cube_height = maxPoint.z-minPoint.z;
     }
     // convert yaw to quartenion
     tf::Matrix3x3 obs_mat;

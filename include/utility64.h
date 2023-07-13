@@ -60,7 +60,7 @@ extern const float ang_res_y = 40.0 / N_SCAN;
 extern const float ang_bottom = 25;
 
 extern const int groundScanInd = 63;
-extern const float groundThreshold = 8; //degree
+extern const float groundThreshold = 5; //degree
 
 extern const float sensorMinimumRange = 2;
 extern const float sensorMountAngle = 0.0;
@@ -77,20 +77,17 @@ extern const float intensityThreshold = 200;
 // extern const int maximumPointsNum = 1000;
 
 // clustering
-extern const float clusterTolerance = 0.8;
+extern const float clusterTolerance = 0.5;
 extern const int minSize = 10;
-extern const int maxSize = 5000;
+extern const int maxSize = 8000;
 
 // Adaptive cropping
-extern float MAX_X = 60;
-extern float MIN_X = -60;
-extern float MAX_Y = 5.5;
-extern float MIN_Y = -5.5;
+extern float MAX_X = 100;
+extern float MIN_X = -100;
+extern float MAX_Y = 10;
+extern float MIN_Y = -10;
 extern float MAX_Z = 2;
 extern float MIN_Z = -1.5;
-
-extern float LANE_MAX_Y = 1.5;
-extern float LANE_MIN_Y = -1.5;
 
 
 // // // Ouster OS1-128

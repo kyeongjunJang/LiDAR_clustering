@@ -12,7 +12,8 @@ geometry_msgs::PolygonStamped CustomMarker::get_polygon_msg(pcl::PointCloud<pcl:
 {
   vector<Point2f> points;
   geometry_msgs::PolygonStamped polygonStamped;
-  polygonStamped.header.frame_id = "os_sensor";
+  //polygonStamped.header.frame_id = "os_sensor";
+  polygonStamped.header.frame_id = "Pandar64";
 
   float min_z = 100.0;
   float max_z = -100.0;
@@ -56,7 +57,8 @@ geometry_msgs::PolygonStamped CustomMarker::get_polygon_msg(pcl::PointCloud<pcl:
 jsk_recognition_msgs::BoundingBox CustomMarker::get_bbox_msg(Box box, int clusterId)
 {
   jsk_recognition_msgs::BoundingBox bbox;
-  bbox.header.frame_id = "os_sensor";
+  //bbox.header.frame_id = "os_sensor";
+  bbox.header.frame_id = "Pandar64";
 
   bbox.pose.position.x = (box.x_min + box.x_max) / 2.0;
   bbox.pose.position.y = (box.y_min + box.y_max) / 2.0;
@@ -76,7 +78,8 @@ jsk_recognition_msgs::BoundingBox CustomMarker::get_bbox_msg(Box box, int cluste
 jsk_recognition_msgs::BoundingBox CustomMarker::get_bboxq_msg(BoxQ box, int clusterId)
 {
   jsk_recognition_msgs::BoundingBox bbox;
-  bbox.header.frame_id = "os_sensor";
+  //bbox.header.frame_id = "os_sensor";
+  bbox.header.frame_id = "Pandar64";
 
   bbox.pose.position.x = box.bboxTransform[0];
   bbox.pose.position.y = box.bboxTransform[1];
@@ -96,7 +99,8 @@ jsk_recognition_msgs::BoundingBox CustomMarker::get_bboxq_msg(BoxQ box, int clus
 visualization_msgs::Marker CustomMarker::get_text_msg(struct trackingStruct &track, int i)
 {
   visualization_msgs::Marker text;
-  text.header.frame_id = "os_sensor";
+  //text.header.frame_id = "os_sensor";
+  text.header.frame_id = "Pandar64";
   text.ns = "text";
   text.id = i;
   text.action = visualization_msgs::Marker::ADD;

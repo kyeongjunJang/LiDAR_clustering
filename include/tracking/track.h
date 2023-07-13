@@ -27,10 +27,14 @@ struct trackingStruct
 	jsk_recognition_msgs::BoundingBox cur_bbox;
 	jsk_recognition_msgs::BoundingBox pre_bbox;
 
+	pcl::PointXYZI pre_minDistPoint;
+	pcl::PointXYZI cur_minDistPoint;
+
 	float vx;
 	float vy;
 	float v;
 	vector<float> v_list;
+	vector<float> angle_list;
 	double sec;
 
 	cv::KalmanFilter kf;
@@ -52,8 +56,7 @@ private:
 	cv::Mat m_matMeasureNoiseCov;
 
 	float m_thres_associationCost;
-	float m_thres_associationCost_mylane;
-
+	
 	// Global variables
 	vector<trackingStruct> vecTracks;
 	vector<pair<int, int>> vecAssignments;
@@ -71,13 +74,12 @@ public:
 	jsk_recognition_msgs::BoundingBoxArray filtering(jsk_recognition_msgs::BoundingBoxArray &clusterBboxArray);
 	void predictNewLocationOfTracks();
 	void assignDetectionsTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray);
-	void assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray, const double lidarSec);
+	void assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray, vector<pcl::PointXYZI> minDistPoint_vector, const double lidarSec);
 	void unassignedTracksUpdate();
 	void deleteLostTracks();
-	void createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray);
+	void createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray, vector<pcl::PointXYZI> minDistPoint_vector);
+	void deleteOverlappedTracks();
 	pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> displayTrack();
-
-	void assignDetectionsTracksMylane(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray);
 };
 
 #endif

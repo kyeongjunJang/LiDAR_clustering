@@ -86,8 +86,7 @@ Track::Track()
 	Mat tempR(stateMeasureDim, 1, CV_32FC1, R);
 	m_matMeasureNoiseCov = Mat::diag(tempR);
 
-	m_thres_associationCost = 3.0f;
-	m_thres_associationCost_mylane = 5.0f;
+	m_thres_associationCost = 5.0f;
 }
 
 //deconstructor
@@ -219,7 +218,7 @@ void Track::assignDetectionsTracks(const jsk_recognition_msgs::BoundingBoxArray 
 	}
 }
 
-void Track::assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray, const double lidarSec)
+void Track::assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray, vector<pcl::PointXYZI> minDistPoint_vector, const double lidarSec)
 {
 	for (int i = 0; i < (int)vecAssignments.size(); i++)
 	{
@@ -236,52 +235,44 @@ void Track::assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &b
 		double curSec = lidarSec;
 		double dt = curSec - vecTracks[idT].sec;
 
-		vecTracks[idT].vx = (bboxMarkerArray.boxes[idD].pose.position.x - vecTracks[idT].pre_bbox.pose.position.x) / dt;
-		vecTracks[idT].vy = (bboxMarkerArray.boxes[idD].pose.position.y - vecTracks[idT].pre_bbox.pose.position.y) / dt;
-		
+		if (sqrt(pow(vecTracks[idT].pre_bbox.pose.position.x, 2) + pow(vecTracks[idT].pre_bbox.pose.position.y, 2)) < 15)
+		{
+			vecTracks[idT].vx = (bboxMarkerArray.boxes[idD].pose.position.x - vecTracks[idT].pre_bbox.pose.position.x) / dt;
+			vecTracks[idT].vy = (bboxMarkerArray.boxes[idD].pose.position.y - vecTracks[idT].pre_bbox.pose.position.y) / dt;
+		}
+		else
+		{
+			vecTracks[idT].vx = (minDistPoint_vector[idD].x - vecTracks[idT].pre_minDistPoint.x) / dt;
+			vecTracks[idT].vy = (minDistPoint_vector[idD].y - vecTracks[idT].pre_minDistPoint.y) / dt;
+		}
+
 		float v = getVectorScale(vecTracks[idT].vx, vecTracks[idT].vy); // m/s
 
-		vecTracks[idT].v_list.push_back(v);
+		//cout << vecTracks[idT].v << endl;
 
-		if (vecTracks[idT].v_list.size() >= 4)
-        {
-            // Apply Gaussian filter
-            float filteredV = gaussianFilter(vecTracks[idT].v_list, 0.6); // 1.0 is the standard deviation (sigma) for Gaussian filter
-
-            // Remove outliers using IQR-based method
-			std::pair<float, float> iqrThresholds = getIQRThreshold(vecTracks[idT].v_list, 0.5);
-			float lowerThreshold = iqrThresholds.first;
-			float upperThreshold = iqrThresholds.second;
-
-			cout <<lowerThreshold << " , " << upperThreshold <<","<<filteredV<< endl;
-
-            // Check if the filtered velocity is an outlier
-            if (filteredV < lowerThreshold && filteredV > upperThreshold)
-            {
-                // If it's an outlier, skip updating the velocity
-                // continue;
-				vecTracks[idT].v_list.erase(vecTracks[idT].v_list.end()); // Remove the oldest value
-				// v = vecTracks[idT].v;
-				v = vecTracks[idT].v_list.front();
-            }
-			else{
-				// Update the velocity with the filtered value
-				v = filteredV;
-				vecTracks[idT].v_list.erase(vecTracks[idT].v_list.begin()); // Remove the oldest value
+		if (vecTracks[idT].v_list.size() < 6)
+		{
+			vecTracks[idT].v_list.push_back(v);
+		}
+		else
+		{
+			if (abs(vecTracks[idT].v - v) < 3){
+				for(int i = 0; i < 6; i++)
+				{
+					vecTracks[idT].v_list[i] = vecTracks[idT].v_list[i + 1];
+					vecTracks[idT].v_list.pop_back();
+					vecTracks[idT].v_list.push_back(v);
+				}
 			}
-        }
+		}
+		vecTracks[idT].v = std::accumulate(vecTracks[idT].v_list.begin(), vecTracks[idT].v_list.end(), 0.0) / vecTracks[idT].v_list.size();
 
-		vecTracks[idT].v = v;
-		vecTracks[idT].cur_bbox.value = v;
-		vecTracks[idT].pre_bbox.pose.position.x = bboxMarkerArray.boxes[idD].pose.position.x;
-		vecTracks[idT].pre_bbox.pose.position.y = bboxMarkerArray.boxes[idD].pose.position.y;
-		vecTracks[idT].pre_bbox.pose.position.z = bboxMarkerArray.boxes[idD].pose.position.z;
-		vecTracks[idT].sec = curSec;
+		//cout << vecTracks[idT].v << endl;
+		
+		vecTracks[idT].cur_bbox.pose.orientation.z = std::accumulate(vecTracks[idT].angle_list.begin(), vecTracks[idT].angle_list.end(), 0.0) / vecTracks[idT].angle_list.size();
 
-		cout << "relative v : " << vecTracks[idT].cur_bbox.value << endl;
-
-		vecTracks[idT].cur_bbox.pose.position.x = vecTracks[idT].kf.statePost.at<float>(0);
-		vecTracks[idT].cur_bbox.pose.position.y = vecTracks[idT].kf.statePost.at<float>(1);
+		vecTracks[idT].cur_bbox.pose.position.x = bboxMarkerArray.boxes[idD].pose.position.x;
+		vecTracks[idT].cur_bbox.pose.position.y = bboxMarkerArray.boxes[idD].pose.position.y;
 		vecTracks[idT].cur_bbox.pose.position.z = bboxMarkerArray.boxes[idD].pose.position.z;
 		vecTracks[idT].cur_bbox.dimensions.x = bboxMarkerArray.boxes[idD].dimensions.x;
 		vecTracks[idT].cur_bbox.dimensions.y = bboxMarkerArray.boxes[idD].dimensions.y;
@@ -290,6 +281,10 @@ void Track::assignedTracksUpdate(const jsk_recognition_msgs::BoundingBoxArray &b
 		vecTracks[idT].cur_bbox.pose.orientation.y = bboxMarkerArray.boxes[idD].pose.orientation.y;
 		vecTracks[idT].cur_bbox.pose.orientation.z = bboxMarkerArray.boxes[idD].pose.orientation.z;
 		vecTracks[idT].cur_bbox.pose.orientation.w = bboxMarkerArray.boxes[idD].pose.orientation.w;
+
+		vecTracks[idT].pre_bbox = vecTracks[idT].cur_bbox;
+		vecTracks[idT].pre_minDistPoint = minDistPoint_vector[idD];
+		vecTracks[idT].sec = curSec;
 
 		vecTracks[idT].age++;
 		vecTracks[idT].cntTotalVisible++;
@@ -302,8 +297,8 @@ void Track::unassignedTracksUpdate()
 	for (int i = 0; i < (int)vecUnssignedTracks.size(); i++)
 	{
 		int id = vecUnssignedTracks[i];
-		vecTracks[i].age++;
-		vecTracks[i].cntConsecutiveInvisible++;
+		vecTracks[id].age++;
+		vecTracks[id].cntConsecutiveInvisible++;
 	}
 }
 
@@ -324,7 +319,7 @@ void Track::deleteLostTracks()
 
 }
 
-void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray)
+void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray, vector<pcl::PointXYZI> minDistPoint_vector)
 {
 	for (int i = 0; i < (int)vecUnssignedDetections.size(); i++)
 	{
@@ -338,6 +333,9 @@ void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxMa
 
 		ts.cur_bbox = bboxMarkerArray.boxes[id];
 		ts.pre_bbox = bboxMarkerArray.boxes[id];
+
+		ts.pre_minDistPoint = minDistPoint_vector[id];
+		ts.cur_minDistPoint = minDistPoint_vector[id];
 
 		ts.vx = 0.0;
 		ts.vy = 0.0;
@@ -364,82 +362,44 @@ void Track::createNewTracks(const jsk_recognition_msgs::BoundingBoxArray &bboxMa
 	}
 }
 
+void Track::deleteOverlappedTracks()
+{
+    for (auto it = vecTracks.begin(); it != vecTracks.end(); ++it) {
+        auto next_it = std::next(it);
+        while (next_it != vecTracks.end()) {
+            double IoU = getBBoxIOU(it->cur_bbox, next_it->cur_bbox);
+            if (IoU > 0.3){
+                if (it->age < next_it->age) {
+                    it = vecTracks.erase(it);
+                } else {
+                    next_it = vecTracks.erase(next_it);
+                }
+            } else {
+                ++next_it;
+            }
+        }
+    }
+}
+
 pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> Track::displayTrack()
 {   
 	CustomMarker customMarker;
 	jsk_recognition_msgs::BoundingBoxArray bboxArray;
 	visualization_msgs::MarkerArray textArray;
+
+	
 	for (int i = 0; i < vecTracks.size(); i++)
 	{
+		vecTracks[i].cur_bbox.label = vecTracks[i].age;
 		// if (vecTracks[i].age >= 3)
-		if (vecTracks[i].age >= 1)
-		{	
+		if (vecTracks[i].age >= 2)
+		{
+			vecTracks[i].cur_bbox.value = vecTracks[i].v;
 			bboxArray.boxes.push_back(vecTracks[i].cur_bbox);
 			textArray.markers.push_back(customMarker.get_text_msg(vecTracks[i], i));
 		}
 	}
+	
 	pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> bbox_text(bboxArray, textArray);
 	return bbox_text;
-}
-
-
-///////////////////////////////////////////////MyLane///////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////////////////
-
-void Track::assignDetectionsTracksMylane(const jsk_recognition_msgs::BoundingBoxArray &bboxMarkerArray)
-{
-	int N = (int)vecTracks.size();             //  N = number of tracking
-	int M = (int)bboxMarkerArray.boxes.size(); //  M = number of detection
-
-	vector<vector<double>> Cost(N, vector<double>(M)); //2 array
-
-	for (int i = 0; i < N; i++)
-	{
-		for (int j = 0; j < M; j++)
-		{
-			// Box Over Lap
-			// Cost[i][j] = 1 - getBBoxIOU(vecTracks[i].cur_bbox, bboxMarkerArray.boxes[j]);
-			// Distance
-			Cost[i][j] = getBBoxDistance(vecTracks[i].cur_bbox, bboxMarkerArray.boxes[j]);
-		}
-	}
-
-	vector<int> assignment;
-
-	if (N != 0)
-	{
-		AssignmentProblemSolver APS;
-		APS.Solve(Cost, assignment, AssignmentProblemSolver::optimal);
-	}
-
-	vecAssignments.clear();
-	vecUnssignedTracks.clear();
-	vecUnssignedDetections.clear();
-
-	for (int i = 0; i < N; i++)
-	{
-		if (assignment[i] == -1)
-		{
-			vecUnssignedTracks.push_back(i);
-		}
-		else
-		{
-			if (Cost[i][assignment[i]] < m_thres_associationCost_mylane)
-			{
-				vecAssignments.push_back(pair<int, int>(i, assignment[i]));
-			}
-			else
-			{
-				vecUnssignedTracks.push_back(i);
-				assignment[i] = -1;
-			}
-		}
-	}
-
-	for (int j = 0; j < M; j++)
-	{
-		auto it = find(assignment.begin(), assignment.end(), j);
-		if (it == assignment.end())
-			vecUnssignedDetections.push_back(j);
-	}
 }

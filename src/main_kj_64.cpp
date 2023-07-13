@@ -10,10 +10,14 @@
 #include <thread>
 #include <math.h>
 #include <typeinfo>
+#include <iomanip>
+#include <novatel_oem7_msgs/INSPVA.h>
+#include <GeographicLib/LocalCartesian.hpp>
 
 #define PI 3.14159265359
 
 using namespace cv;
+using namespace std;
 
 class Process
 {
@@ -30,15 +34,21 @@ private:
     double cluster_term2 = 0;
     double car_x = 0;
     double car_y = 0;
-    double car_theta = 0;
+    double car_z = 0;
+    double car_theta = -1.5;
     int cluster_num = 0;
     int upper_num = 0;
     int bottom_num = 0;
+
+    double lat0 = 37.3888319;
+    double lon0 = 126.6428739;
+    double h0 = 7.369;
 
     ros::NodeHandle nh;
 
     ros::Subscriber subLaserCloud;
     ros::Subscriber subCarPose;
+    ros::Subscriber subInsPva;
 
     ros::Publisher pubFullCloud;
     ros::Publisher pubTransCloud;
@@ -48,6 +58,7 @@ private:
     ros::Publisher pub_cluster_poly;
     ros::Publisher pub_cluster_box;
     ros::Publisher pub_track_box;
+    ros::Publisher pub_trans_track_box;
     ros::Publisher pub_track_text;
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr laserCloudIn;
@@ -60,7 +71,9 @@ private:
     ProcessPointClouds<pcl::PointXYZI> pointProcessor;
 
     jsk_recognition_msgs::BoundingBoxArray cluster_bbox_array;
+    vector<pcl::PointXYZI> minDistPoint_vector;
     jsk_recognition_msgs::BoundingBoxArray track_bbox_array;
+    jsk_recognition_msgs::BoundingBoxArray trans_track_bbox_array;
     visualization_msgs::MarkerArray track_text_array;
     geometry_msgs::Pose2D ego_car_pose;
 
@@ -72,29 +85,25 @@ private:
 
     CustomMarker customMarker;
     Track tracker;
-    Track mylane_tracker;
 
-    ros::Publisher pub_mylane_cluster_box;
-    ros::Publisher pub_mylane_track_box;
-    jsk_recognition_msgs::BoundingBoxArray mylane_cluster_bbox_array;
-    jsk_recognition_msgs::BoundingBoxArray mylane_track_bbox_array;
     double lidarSec;
+
 
 public:
     Process() : nh("~")
     {
         subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 1, &Process::cloudHandler, this);
         subCarPose = nh.subscribe<geometry_msgs::Pose2D>("/enu_pose", 1, &Process::carPoseCallback, this);
+        subInsPva = nh.subscribe<novatel_oem7_msgs::INSPVA>("/novatel/oem7/inspva", 1, &Process::insPvaCallback, this);
         pubFullCloud = nh.advertise<sensor_msgs::PointCloud2>("/full_cloud_projection", 1);
         pubTransCloud = nh.advertise<sensor_msgs::PointCloud2>("/transformed_cloud", 1);
         pubGroundCloud = nh.advertise<sensor_msgs::PointCloud2>("/ground_cloud", 1);
+        pubSegmentedCloud = nh.advertise<sensor_msgs::PointCloud2>("/segmented_cloud", 1);
         pubGroundRemovedCloud = nh.advertise<sensor_msgs::PointCloud2>("/ground_removed_cloud", 1);
         pub_cluster_box = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/cluster_box", 1);
         pub_track_box = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/track_box", 1);
+        pub_trans_track_box = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/trans_track_box", 1);
         pub_track_text = nh.advertise<visualization_msgs::MarkerArray>("/lidar/track_text", 1);
-
-        pub_mylane_cluster_box = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/mylane_cluster_box", 1);
-        pub_mylane_track_box = nh.advertise<jsk_recognition_msgs::BoundingBoxArray>("/mobinha/perception/lidar/mylane_track_box", 1);
 
         nanPoint.x = std::numeric_limits<float>::quiet_NaN();
         nanPoint.y = std::numeric_limits<float>::quiet_NaN();
@@ -107,6 +116,20 @@ public:
     }
 
     ~Process() {}
+
+
+    void insPvaCallback(const novatel_oem7_msgs::INSPVA insPvaMsg)
+    {
+        float car_lat = insPvaMsg.latitude;
+        float car_long = insPvaMsg.longitude;
+        float car_h = insPvaMsg.height;
+        float car_azim = insPvaMsg.azimuth;
+
+        //GrographicLib::LocalCartesian proj(lat0, lon0, h0, GeographicLib::Geocentric::WGS84());
+
+        //proj.Forward(car_lat, car_long, car_h, car_x, car_y, car_z);
+        
+    }
 
     void carPoseCallback(const geometry_msgs::Pose2D carPoseMsg)
     {
@@ -134,7 +157,7 @@ public:
         copyPointCloud(laserCloudMsg);
         // 2. Range image projection
         projectPointCloud();
-        // transformPointCloud();
+        transformPointCloud();
         //fogFiltering();
         // 3. Mark ground points
         groundRemoval();
@@ -144,8 +167,8 @@ public:
         cloudPublish();
         // 6. Tracking box
         tracking();
-        // mylaneTracking();
         // 7. publish clustering and tracking
+        transformTrackBox();
         publishResult();
         // 8. Reset parameters for next iteration
         resetParameters();
@@ -275,13 +298,28 @@ public:
 
     void transformPointCloud()
     {
-        
+        float rad_theta = car_theta * PI / 180;
+
         Eigen::Matrix4f trans;
-        trans<< cos((car_theta -1) * PI / 180), -sin((car_theta -1) * PI / 180),  0, car_x + 0.5,
-                sin((car_theta -1) * PI / 180), cos((car_theta -1) * PI / 180),  0, car_y - 0.7,
+        trans << cos(rad_theta), -sin(rad_theta),  0, car_x,
+                sin(rad_theta), cos(rad_theta),  0, car_y,
                 0,   0,  1,     2,
                 0,   0,  0,     1;
         pcl::transformPointCloud(*fullCloud, *fullCloud, trans);
+    }
+
+    void transformTrackBox()
+    {
+        float rad_theta = car_theta * PI / 180;
+
+        for (size_t i = 0; i < track_bbox_array.boxes.size(); i++){
+            jsk_recognition_msgs::BoundingBox trans_bbox = track_bbox_array.boxes[i];
+
+            trans_bbox.pose.position.x = track_bbox_array.boxes[i].pose.position.x * cos(rad_theta) - track_bbox_array.boxes[i].pose.position.y * sin(rad_theta) + car_x;
+            trans_bbox.pose.position.y = track_bbox_array.boxes[i].pose.position.x * sin(rad_theta) + track_bbox_array.boxes[i].pose.position.y * cos(rad_theta) + car_y;
+            trans_bbox.pose.orientation.z = track_bbox_array.boxes[i].pose.orientation.z + rad_theta;;
+            trans_track_bbox_array.boxes.push_back(trans_bbox);
+        }
     }
 
     void groundRemoval()
@@ -308,6 +346,7 @@ public:
                 diffY = fullCloud->points[upperInd].y - fullCloud->points[lowerInd].y;
                 diffZ = fullCloud->points[upperInd].z - fullCloud->points[lowerInd].z;
                 angle = atan2(diffZ, sqrt(diffX * diffX + diffY * diffY)) * 180 / M_PI;
+
                 if (abs(angle - sensorMountAngle) <= groundThreshold)// && diffX <= 20)
                 {
                     groundMat.at<int8_t>(i, j) = 1;
@@ -320,10 +359,45 @@ public:
                 }
                 else if (fullCloud->points[lowerInd].x < MAX_X && fullCloud->points[lowerInd].x > MIN_X &&
                           fullCloud->points[lowerInd].y < MAX_Y && fullCloud->points[lowerInd].y > MIN_Y &&
-                          fullCloud->points[lowerInd].z < MAX_Z && fullCloud->points[lowerInd].z > MIN_Z &&
                           groundMat.at<int8_t>(i, j) == 0)
                 {
                     groundRemovedCloud->push_back(fullCloud->points[lowerInd]);
+                }
+            }
+        }
+
+        for (size_t j = 0; j < Horizon_SCAN; ++j)
+        {
+            for (size_t i = 0; i < groundScanInd; ++i)
+            {
+                lowerInd = j + (i) * Horizon_SCAN;
+                upperInd = j + (i + 1) * Horizon_SCAN;
+                if (fullCloud->points[lowerInd].intensity == -1||
+                    fullCloud->points[upperInd].intensity == -1)
+                {
+                    groundMat.at<int8_t>(i, j) = -1;
+                    continue;
+                }
+                diffX = fullCloud->points[upperInd].x - fullCloud->points[lowerInd].x;
+                diffY = fullCloud->points[upperInd].y - fullCloud->points[lowerInd].y;
+                diffZ = fullCloud->points[upperInd].z - fullCloud->points[lowerInd].z;
+                angle = atan2(diffZ, sqrt(diffX * diffX + diffY * diffY)) * 180 / M_PI;
+
+                if (abs(angle - sensorMountAngle) <= groundThreshold)// && diffX <= 20)
+                {
+                    groundMat.at<int8_t>(i, j) = 1;
+                    groundMat.at<int8_t>(i + 1, j) = 1;
+                }
+
+                if (groundMat.at<int8_t>(i, j) == 1)
+                {
+                    segmentedCloud->push_back(fullCloud->points[lowerInd]);
+                }
+                else if (fullCloud->points[lowerInd].x < MAX_X && fullCloud->points[lowerInd].x > MIN_X &&
+                          fullCloud->points[lowerInd].y < MAX_Y && fullCloud->points[lowerInd].y > MIN_Y &&
+                          groundMat.at<int8_t>(i, j) == 0)
+                {
+                    break;
                 }
             }
         }
@@ -337,32 +411,60 @@ public:
         int clusterId = 0;
         for (pcl::PointCloud<pcl::PointXYZI>::Ptr cluster : cloudClusters)
         {
-            pcl::PointXYZI minPoint, maxPoint;
+            pcl::PointXYZI minPoint, maxPoint, minDistPoint, averPoint;
             pcl::getMinMax3D(*cluster, minPoint, maxPoint);
-
-            // new
+            
             BoxQ boxq = pointProcessor.MinimumOrientedBoundingBox(cluster, cloudHeader.stamp.toSec());
             jsk_recognition_msgs::BoundingBox bbox = customMarker.get_bboxq_msg(boxq, clusterId);
 
-            if (boxq.cube_length < 18 && boxq.cube_width < 4)
-            {
-                cluster_bbox_array.boxes.push_back(bbox);
-                if (boxq.bboxTransform[1] < LANE_MAX_Y && boxq.bboxTransform[1] > LANE_MIN_Y){
-                    
-                    Box box = pointProcessor.BoundingBox(cluster);
-                    bbox.pose.position.x = (box.x_max + box.x_min) / 2;
-                    bbox.pose.position.y = (box.y_max + box.y_min) / 2;
-                    bbox.pose.position.z = (box.z_max + box.z_min) / 2;
-                    bbox.dimensions.x = (box.x_max - box.x_min);
-                    bbox.dimensions.y = (box.y_max - box.y_min);
-                    bbox.dimensions.z = (box.z_max - box.z_min);
-                    bbox.pose.orientation.x = 0;
-                    bbox.pose.orientation.y = 0;
-                    bbox.pose.orientation.z = 0;
+            size_t clusterSize = cluster->points.size();
+            
+            // float minDist = 100;
+            // for (size_t i = 0; i < clusterSize; ++i)
+            // {
+            //     float dist = sqrt(pow(cluster->points[i].x, 2) + pow(cluster->points[i].y, 2));
+            //     if (dist < minDist)
+            //     {
+            //         minDistPoint.x = cluster->points[i].x;
+            //         minDistPoint.y = cluster->points[i].y;
+            //         minDistPoint.z = cluster->points[i].z;
+            //         minDist = dist;
+            //     }
+            // }
 
-                    mylane_cluster_bbox_array.boxes.push_back(bbox);
-                }
+            averPoint.x = 0;
+            averPoint.y = 0;
+            averPoint.z = 0;
+            for (size_t i = 0; i < clusterSize; ++i)
+            {
+                averPoint.x += cluster->points[i].x;
+                averPoint.y += cluster->points[i].y; 
+                averPoint.z += cluster->points[i].z; 
             }
+
+            averPoint.x = averPoint.x/clusterSize;
+            averPoint.y = averPoint.y/clusterSize;
+            averPoint.z = averPoint.z/clusterSize;
+
+            if (0.5 < boxq.cube_height && boxq.cube_height < 3
+                && boxq.cube_length < 18
+                && boxq.cube_width < 4
+                && (0.5 < boxq.cube_length || 0.5 < boxq.cube_width)
+                && 0.5 < boxq.cube_length * boxq.cube_width && boxq.cube_length * boxq.cube_width < 30)
+            {
+                minDistPoint_vector.push_back(averPoint);
+                cluster_bbox_array.boxes.push_back(bbox);
+            }
+            
+            // Box box = pointProcessor.BoundingBox(cluster);
+            // jsk_recognition_msgs::BoundingBox bbox = customMarker.get_bbox_msg(box, clusterId);
+            // cluster_bbox_array.boxes.push_back(bbox);
+            // if (box.x_max - box.x_min < 18 && box.y_max - box.y_min < 4 && box.z_max - box.z_min < 3)
+            // {
+            //     cluster_vector.push_back(cluster);
+            //     cluster_bbox_array.boxes.push_back(bbox);
+            // }
+            
         }
     }
 
@@ -401,31 +503,28 @@ public:
             laserCloudTemp.header.frame_id = frameID;
             pubGroundRemovedCloud.publish(laserCloudTemp);
         }
+        // segmented cloud
+        if (pubSegmentedCloud.getNumSubscribers() != 0)
+        {
+            pcl::toROSMsg(*segmentedCloud, laserCloudTemp);
+            laserCloudTemp.header.stamp = cloudHeader.stamp;
+            laserCloudTemp.header.frame_id = frameID;
+            pubSegmentedCloud.publish(laserCloudTemp);
+        }
     }
 
     void tracking(){
-        jsk_recognition_msgs::BoundingBoxArray filtered_bbox_array = tracker.filtering(cluster_bbox_array);
+        // jsk_recognition_msgs::BoundingBoxArray filtered_bbox_array = tracker.filtering(cluster_bbox_array);
         tracker.predictNewLocationOfTracks();
-        tracker.assignDetectionsTracks(filtered_bbox_array);
-        tracker.assignedTracksUpdate(filtered_bbox_array, lidarSec);
+        tracker.assignDetectionsTracks(cluster_bbox_array);
+        tracker.assignedTracksUpdate(cluster_bbox_array, minDistPoint_vector, lidarSec);
         tracker.unassignedTracksUpdate();
         tracker.deleteLostTracks();
-        tracker.createNewTracks(filtered_bbox_array);
+        tracker.createNewTracks(cluster_bbox_array, minDistPoint_vector);
+        tracker.deleteOverlappedTracks();
         pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> bbox_text = tracker.displayTrack();
         track_bbox_array = bbox_text.first;
         track_text_array = bbox_text.second;
-    }
-
-    void mylaneTracking(){
-        jsk_recognition_msgs::BoundingBoxArray filtered_bbox_array = mylane_tracker.filtering(mylane_cluster_bbox_array);
-        mylane_tracker.predictNewLocationOfTracks();
-        mylane_tracker.assignDetectionsTracksMylane(filtered_bbox_array);
-        mylane_tracker.assignedTracksUpdate(filtered_bbox_array, lidarSec);
-        mylane_tracker.unassignedTracksUpdate();
-        mylane_tracker.deleteLostTracks();
-        mylane_tracker.createNewTracks(filtered_bbox_array);
-        pair<jsk_recognition_msgs::BoundingBoxArray, visualization_msgs::MarkerArray> bbox_text = mylane_tracker.displayTrack();
-        mylane_track_bbox_array = bbox_text.first;
     }
 
     void publishResult()
@@ -440,15 +539,10 @@ public:
         track_bbox_array.header.frame_id = frameID;
         pub_track_box.publish(track_bbox_array);
 
-        // mylane cluster_box array
-        mylane_cluster_bbox_array.header.stamp = cloudHeader.stamp;
-        mylane_cluster_bbox_array.header.frame_id = frameID;
-        pub_mylane_cluster_box.publish(mylane_cluster_bbox_array);
-
-        // mylane track_box array
-        mylane_track_bbox_array.header.stamp = cloudHeader.stamp;
-        mylane_track_bbox_array.header.frame_id = frameID;
-        pub_mylane_track_box.publish(mylane_track_bbox_array);
+        // trans_track_box array
+        trans_track_bbox_array.header.stamp = cloudHeader.stamp;
+        trans_track_bbox_array.header.frame_id = frameID;
+        pub_trans_track_box.publish(trans_track_bbox_array);
     }
 
     void resetParameters()
@@ -460,20 +554,19 @@ public:
         cluster_bbox_array.boxes.clear();
         track_bbox_array.boxes.clear();
         track_text_array.markers.clear();
-
-        mylane_cluster_bbox_array.boxes.clear();
-        mylane_track_bbox_array.boxes.clear();
+        trans_track_bbox_array.boxes.clear();
+        minDistPoint_vector.clear();
 
         groundMat = Mat(N_SCAN, Horizon_SCAN, CV_8S, Scalar::all(0));
 
         std::fill(fullCloud->points.begin(), fullCloud->points.end(), nanPoint);
         std::fill(transCloud->points.begin(), transCloud->points.end(), nanPoint);
+
     }
 };
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "lidar");
-
     while(ros::ok())
     {
         Process P;
