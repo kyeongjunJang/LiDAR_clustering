@@ -54,7 +54,7 @@ geometry_msgs::PolygonStamped CustomMarker::get_polygon_msg(pcl::PointCloud<pcl:
   return polygonStamped;
 }
 
-jsk_recognition_msgs::BoundingBox CustomMarker::get_bbox_msg(Box box, int clusterId, int clusterclass)
+jsk_recognition_msgs::BoundingBox CustomMarker::get_bbox_msg(Box box, int clusterId)
 {
   jsk_recognition_msgs::BoundingBox bbox;
   //bbox.header.frame_id = "os_sensor";
@@ -71,7 +71,6 @@ jsk_recognition_msgs::BoundingBox CustomMarker::get_bbox_msg(Box box, int cluste
   bbox.dimensions.y = box.y_max - box.y_min;
   bbox.dimensions.z = box.z_max - box.z_min;
   bbox.value = clusterId;
-  bbox.label = clusterclass;
 
   return bbox;
 }

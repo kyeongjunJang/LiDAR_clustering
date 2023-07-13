@@ -124,6 +124,52 @@ double Track::getBBoxIOU(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognitio
 	return iou;
 }
 
+double Track::getBBoxOverlap(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_msgs::BoundingBox bbox2)
+{
+	double boxA[4] = {bbox1.pose.position.x - bbox1.dimensions.x/2.0, 
+					 bbox1.pose.position.y - bbox1.dimensions.y/2.0, 
+					 bbox1.pose.position.x + bbox1.dimensions.x/2.0, 
+					 bbox1.pose.position.y + bbox1.dimensions.y/2.0};
+ 	double boxB[4] = {bbox2.pose.position.x - bbox2.dimensions.x/2.0, 
+					 bbox2.pose.position.y - bbox2.dimensions.y/2.0, 
+					 bbox2.pose.position.x + bbox2.dimensions.x/2.0, 
+					 bbox2.pose.position.y + bbox2.dimensions.y/2.0};
+	double xA = max(boxA[0], boxB[0]);
+	double yA = max(boxA[1], boxB[1]);
+	double xB = min(boxA[2], boxB[2]);
+	double yB = min(boxA[3], boxB[3]);
+
+	double interArea = max(0.0, xB - xA + 1) * max(0.0, yB - yA + 1);
+ 	
+ 	double boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1);
+	double boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1);
+
+	double overlap = interArea / boxAArea;
+
+	return overlap;
+}
+
+double Track::getBBoxGap(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_msgs::BoundingBox bbox2)
+{
+	double boxA[4] = {bbox1.pose.position.x - bbox1.dimensions.x/2.0, 
+					 bbox1.pose.position.y - bbox1.dimensions.y/2.0, 
+					 bbox1.pose.position.x + bbox1.dimensions.x/2.0, 
+					 bbox1.pose.position.y + bbox1.dimensions.y/2.0};
+ 	double boxB[4] = {bbox2.pose.position.x - bbox2.dimensions.x/2.0, 
+					 bbox2.pose.position.y - bbox2.dimensions.y/2.0, 
+					 bbox2.pose.position.x + bbox2.dimensions.x/2.0, 
+					 bbox2.pose.position.y + bbox2.dimensions.y/2.0};
+ 	
+ 	double boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1);
+	double boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1);
+
+	double gap;
+	if(boxAArea > boxBArea) gap = boxAArea / boxBArea;
+	else gap = boxBArea / boxAArea;
+
+	return gap;
+}
+
 double Track::getBBoxDistance(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_msgs::BoundingBox bbox2)
 {	
 	float distance = sqrt(pow(bbox2.pose.position.x - bbox1.pose.position.x, 2) + pow(bbox2.pose.position.y - bbox1.pose.position.y, 2));
@@ -198,7 +244,8 @@ void Track::assignDetectionsTracks(const jsk_recognition_msgs::BoundingBoxArray 
 		}
 		else
 		{
-			if (Cost[i][assignment[i]] < m_thres_associationCost)
+			
+			if ((Cost[i][assignment[i]] < m_thres_associationCost) && (3 > getBBoxGap(vecTracks[i].cur_bbox, bboxMarkerArray.boxes[assignment[i]])))
 			{
 				vecAssignments.push_back(pair<int, int>(i, assignment[i]));
 			}
@@ -367,7 +414,7 @@ void Track::deleteOverlappedTracks()
     for (auto it = vecTracks.begin(); it != vecTracks.end(); ++it) {
         auto next_it = std::next(it);
         while (next_it != vecTracks.end()) {
-            double IoU = getBBoxIOU(it->cur_bbox, next_it->cur_bbox);
+            double IoU = getBBoxOverlap(it->cur_bbox, next_it->cur_bbox);
             if (IoU > 0.3){
                 if (it->age < next_it->age) {
                     it = vecTracks.erase(it);

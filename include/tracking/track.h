@@ -70,6 +70,8 @@ public:
 	~Track();
 	float getVectorScale(float v1, float v2);
 	double getBBoxIOU(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_msgs::BoundingBox bbox2);
+	double getBBoxOverlap(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_msgs::BoundingBox bbox2);
+	double getBBoxGap(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_msgs::BoundingBox bbox2);
 	double getBBoxDistance(jsk_recognition_msgs::BoundingBox bbox1, jsk_recognition_msgs::BoundingBox bbox2);
 	jsk_recognition_msgs::BoundingBoxArray filtering(jsk_recognition_msgs::BoundingBoxArray &clusterBboxArray);
 	void predictNewLocationOfTracks();

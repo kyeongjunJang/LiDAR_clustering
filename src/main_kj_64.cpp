@@ -413,24 +413,8 @@ public:
         {
             pcl::PointXYZI minPoint, maxPoint, minDistPoint, averPoint;
             pcl::getMinMax3D(*cluster, minPoint, maxPoint);
-            
-            BoxQ boxq = pointProcessor.MinimumOrientedBoundingBox(cluster, cloudHeader.stamp.toSec());
-            jsk_recognition_msgs::BoundingBox bbox = customMarker.get_bboxq_msg(boxq, clusterId);
 
             size_t clusterSize = cluster->points.size();
-            
-            // float minDist = 100;
-            // for (size_t i = 0; i < clusterSize; ++i)
-            // {
-            //     float dist = sqrt(pow(cluster->points[i].x, 2) + pow(cluster->points[i].y, 2));
-            //     if (dist < minDist)
-            //     {
-            //         minDistPoint.x = cluster->points[i].x;
-            //         minDistPoint.y = cluster->points[i].y;
-            //         minDistPoint.z = cluster->points[i].z;
-            //         minDist = dist;
-            //     }
-            // }
 
             averPoint.x = 0;
             averPoint.y = 0;
@@ -446,24 +430,26 @@ public:
             averPoint.y = averPoint.y/clusterSize;
             averPoint.z = averPoint.z/clusterSize;
 
-            if (0.5 < boxq.cube_height && boxq.cube_height < 3
-                && boxq.cube_length < 18
-                && boxq.cube_width < 4
-                && (0.5 < boxq.cube_length || 0.5 < boxq.cube_width)
-                && 0.5 < boxq.cube_length * boxq.cube_width && boxq.cube_length * boxq.cube_width < 30)
+            // BoxQ boxq = pointProcessor.MinimumOrientedBoundingBox(cluster, cloudHeader.stamp.toSec());
+            // jsk_recognition_msgs::BoundingBox bbox = customMarker.get_bboxq_msg(boxq, clusterId);
+            // if (0.5 < boxq.cube_height && boxq.cube_height < 3
+            //     && boxq.cube_length < 18
+            //     && boxq.cube_width < 4
+            //     && (0.5 < boxq.cube_length || 0.5 < boxq.cube_width)
+            //     && 0.5 < boxq.cube_length * boxq.cube_width && boxq.cube_length * boxq.cube_width < 30)
+            // {
+            //     minDistPoint_vector.push_back(averPoint);
+            //     cluster_bbox_array.boxes.push_back(bbox);
+            // }
+            
+            Box box = pointProcessor.BoundingBox(cluster);
+            jsk_recognition_msgs::BoundingBox bbox = customMarker.get_bbox_msg(box, clusterId);
+            cluster_bbox_array.boxes.push_back(bbox);
+            if (box.x_max - box.x_min < 20 && box.y_max - box.y_min < 20 && box.z_max - box.z_min < 5)
             {
                 minDistPoint_vector.push_back(averPoint);
                 cluster_bbox_array.boxes.push_back(bbox);
             }
-            
-            // Box box = pointProcessor.BoundingBox(cluster);
-            // jsk_recognition_msgs::BoundingBox bbox = customMarker.get_bbox_msg(box, clusterId);
-            // cluster_bbox_array.boxes.push_back(bbox);
-            // if (box.x_max - box.x_min < 18 && box.y_max - box.y_min < 4 && box.z_max - box.z_min < 3)
-            // {
-            //     cluster_vector.push_back(cluster);
-            //     cluster_bbox_array.boxes.push_back(bbox);
-            // }
             
         }
     }

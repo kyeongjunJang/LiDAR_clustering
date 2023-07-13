@@ -77,15 +77,15 @@ extern const float intensityThreshold = 200;
 // extern const int maximumPointsNum = 1000;
 
 // clustering
-extern const float clusterTolerance = 0.5;
+extern const float clusterTolerance = 0.8;
 extern const int minSize = 10;
 extern const int maxSize = 8000;
 
 // Adaptive cropping
 extern float MAX_X = 100;
 extern float MIN_X = -100;
-extern float MAX_Y = 10;
-extern float MIN_Y = -10;
+extern float MAX_Y = 20;
+extern float MIN_Y = -20;
 extern float MAX_Z = 2;
 extern float MIN_Z = -1.5;
 

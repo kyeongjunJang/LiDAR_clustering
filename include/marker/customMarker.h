@@ -9,6 +9,7 @@
 #include <geometry_msgs/PolygonStamped.h>
 #include <jsk_recognition_msgs/BoundingBox.h>
 #include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 
 #include "process/box.h"
 #include "tracking/track.h"
@@ -25,7 +26,7 @@ public:
 
     geometry_msgs::PolygonStamped get_polygon_msg(pcl::PointCloud<pcl::PointXYZI>::Ptr cluster);
     
-    jsk_recognition_msgs::BoundingBox get_bbox_msg(Box box, int clusterId, int clusterclass);
+    jsk_recognition_msgs::BoundingBox get_bbox_msg(Box box, int clusterId);
     
     jsk_recognition_msgs::BoundingBox get_bboxq_msg(BoxQ box, int clusterId);
 
